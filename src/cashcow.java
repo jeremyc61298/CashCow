@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Scanner;
 import java.util.Stack;
 
@@ -25,10 +26,11 @@ public class cashcow {
     }
 
     private static class GameBoard {
-        private final static int ROWS = 12;
-        private final static int COLS = 10;
+        private int ROWS = 12;
+        private int COLS = 10;
         private Character[][] board;
         private ArrayList<Move> moves;
+        HashSet<Point> markedSet;
         private int numMoves;
         private int totalCharacters = ROWS * COLS;
 
@@ -70,8 +72,9 @@ public class cashcow {
         // Returns the number of slots cleared
         private int clearCluster(Move current) {
             int slotsCleared = 0;
-            Character[][] scratch = copyBoard();
             Stack<Point> points = new Stack<>();
+            markedSet = new HashSet<>();
+            ArrayList<Point> pointsTested = new ArrayList<>();
             points.push(new Point(current.row, current.column));
 
             while(!points.empty()) {
@@ -79,40 +82,45 @@ public class cashcow {
 
                 // Check North
                 slotsCleared += testPoint(new Point(currentPoint.x - 1, currentPoint.y),
-                        currentPoint, scratch, points);
+                        currentPoint, pointsTested, points);
 
                 // Check East
                 slotsCleared += testPoint(new Point(currentPoint.x, currentPoint.y + 1),
-                        currentPoint, scratch, points);
+                        currentPoint, pointsTested, points);
 
                 // Check South
                 slotsCleared += testPoint(new Point(currentPoint.x + 1, currentPoint.y),
-                        currentPoint, scratch, points);
+                        currentPoint, pointsTested, points);
 
                 // Check West
-                slotsCleared += testPoint(new Point(currentPoint.x, currentPoint.y + 1),
-                        currentPoint, scratch, points);
+                slotsCleared += testPoint(new Point(currentPoint.x, currentPoint.y - 1),
+                        currentPoint, pointsTested, points);
 
             }
 
             if (slotsCleared > 3) {
-                board = scratch;
                 compactBoard();
             }else {
                 slotsCleared = 0;
+                for (Point p : pointsTested) {
+                    markedSet.remove(p);
+                }
             }
+            pointsTested.clear();
             return slotsCleared;
         }
 
-        private int testPoint(Point pToTest, Point pOld, Character[][] currentBoard, Stack<Point> points) {
+        private int testPoint(Point pToTest, Point pOld, ArrayList<Point> pointsTested, Stack<Point> points) {
             int cleared = 0;
+            // If it's a valid move
             if (pToTest.x < ROWS && pToTest.x >= 0 && pToTest.y < COLS && pToTest.y >= 0) {
-                if (board[pToTest.x][pToTest.y]!= null &&
+                // If the point hasn't already been tested and it is the same color
+                if (!markedSet.contains(pToTest) &&
                         board[pToTest.x][pToTest.y].equals(board[pOld.x][pOld.y])){
                     points.push(pToTest);
 
-                    // Need to mark here instead of setting equal to null
-                    board[pToTest.x][pToTest.y] = null;
+                    markedSet.add(pToTest);
+                    pointsTested.add(pToTest);
                     cleared = 1;
                 }
             }
@@ -131,28 +139,32 @@ public class cashcow {
 
         private void compactBoard() {
             // Compress the board downward
-            for (int i = ROWS - 1; i >= 0; i--) {
-                for (int j = COLS; j >= 0; j--) {
-                    while (board[i][j] == null && board[i][j - 1] != null) {
-                        board[i][j] = board[i][j - 1];
-                        board[i][j - 1] = null;
+            for (int i = ROWS - 2; i > 0; i--) {
+                for (int j = COLS - 1; j >= 0; j--) {
+                    Point current = new Point(i, j);
+                    Point above = new Point(i - 1, j);
+                    while (markedSet.contains(current) && !markedSet.contains(above)) {
+                        markedSet.remove(current);
+                        board[i][j] = board[i - 1][j];
+                        markedSet.add(above);
                     }
                 }
             }
 
             // Compress the board leftward, row by row
             for (int i = 0; i < COLS - 1; i++) {
-                boolean allNull = true;
+                boolean allInvalid = true;
                 for (int j = 0; j < ROWS; j++) {
-                    if (board[j][i] != null) {
-                        allNull = false;
+                    if (!markedSet.contains(new Point(j, i))) {
+                        allInvalid = false;
                         break;
                     }
                 }
-                if (allNull) {
-                    for (int j = 0; j < ROWS; j++) {
+                if (allInvalid) {
+                    for (int j = 0; j < ROWS - 1; j++) {
+                        markedSet.remove(new Point(j, i));
                         board[j][i] = board[j + 1][i];
-                        board[j + 1][i] = null;
+                        markedSet.add(new Point(j + 1, i));
                     }
                 }
             }
